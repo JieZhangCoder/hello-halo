@@ -9,7 +9,8 @@
  *  - keeps the pty size in sync via the fit addon + ResizeObserver.
  *
  * A soft border highlight indicates when the AI is actively writing, so the two
- * parties never surprise each other (Ctrl+C always reaches the pty).
+ * parties never surprise each other (Ctrl+C reaches the pty unless a
+ * selection turns it into a copy — see attachCustomKeyEventHandler).
  */
 
 import { useEffect, useRef, useState } from 'react'
@@ -22,6 +23,7 @@ import { useTerminalStore } from '../../../stores/terminal.store'
 import { useTranslation } from '../../../i18n'
 import type { TabState } from '../../../services/canvas-lifecycle'
 import { getTerminalThemeOptions, isLightTheme } from '../../../lib/terminal-theme'
+import { copyToClipboard } from '../../../utils/clipboard'
 
 interface TerminalViewerProps {
   tab: TabState
@@ -75,7 +77,9 @@ export function TerminalViewer({ tab }: TerminalViewerProps) {
     // SIGINT (#358).
     term.attachCustomKeyEventHandler((e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'c' && term.hasSelection()) {
-        if (e.type === 'keydown') void navigator.clipboard.writeText(term.getSelection())
+        // copyToClipboard falls back to execCommand on HTTP remote (non-secure
+        // context), where navigator.clipboard is undefined.
+        if (e.type === 'keydown') void copyToClipboard(term.getSelection()).catch(() => {})
         return false
       }
       return true
