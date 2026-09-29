@@ -21,7 +21,7 @@ import { isElectron } from '../../../api/transport'
 import { useTerminalStore } from '../../../stores/terminal.store'
 import { useTranslation } from '../../../i18n'
 import type { TabState } from '../../../services/canvas-lifecycle'
-import { buildTheme, getMinimumContrastRatio } from '../../../lib/terminal-theme'
+import { getTerminalThemeOptions, isLightTheme } from '../../../lib/terminal-theme'
 
 interface TerminalViewerProps {
   tab: TabState
@@ -61,8 +61,7 @@ export function TerminalViewer({ tab }: TerminalViewerProps) {
       cursorBlink: true,
       convertEol: false,
       scrollback: 10000,
-      theme: buildTheme(),
-      minimumContrastRatio: getMinimumContrastRatio(),
+      ...getTerminalThemeOptions(),
       allowProposedApi: true,
     })
     const fit = new FitAddon()
@@ -70,6 +69,17 @@ export function TerminalViewer({ tab }: TerminalViewerProps) {
     term.open(containerRef.current)
     termRef.current = term
     fitRef.current = fit
+
+    // Ctrl/Cmd+C copies when text is selected (xterm's selection is internal —
+    // the browser never sees it); without a selection it passes through as
+    // SIGINT (#358).
+    term.attachCustomKeyEventHandler((e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'c' && term.hasSelection()) {
+        if (e.type === 'keydown') void navigator.clipboard.writeText(term.getSelection())
+        return false
+      }
+      return true
+    })
 
     let disposed = false
 
@@ -168,10 +178,15 @@ export function TerminalViewer({ tab }: TerminalViewerProps) {
     ro.observe(containerRef.current)
 
     // xterm.js caches theme colors; toggling the class alone does not repaint.
+    // Unrelated <html> class mutations must not trigger a repaint.
+    let lastIsLight = isLightTheme()
     const themeObserver = new MutationObserver(() => {
       if (disposed || !termRef.current) return
-      termRef.current.options.theme = buildTheme()
-      termRef.current.options.minimumContrastRatio = getMinimumContrastRatio()
+      if (isLightTheme() === lastIsLight) return
+      lastIsLight = !lastIsLight
+      const { theme, minimumContrastRatio } = getTerminalThemeOptions()
+      termRef.current.options.theme = theme
+      termRef.current.options.minimumContrastRatio = minimumContrastRatio
     })
     themeObserver.observe(document.documentElement, {
       attributes: true,
