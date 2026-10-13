@@ -31,6 +31,15 @@ export interface DiffEditorSpec {
   path: string
   /** False for fragments whose line numbers are not the file's. */
   lineNumbers: boolean
+  /**
+   * Whether long lines wrap. Off only in the one-file view of a large diff:
+   * wrapped lines past the viewport are height-estimated, the estimate
+   * undercounts wide CJK glyphs, and the shortfall keeps the tail of a long
+   * diff out of the viewport (#428). Unwrapped lines share one height, so
+   * there the line estimates are exact; block widgets (comment cards,
+   * collapsed sections) are still estimated either way.
+   */
+  wrap: boolean
   /** Translations of CodeMirror's own phrases ("$ unchanged lines"). */
   phrases: Record<string, string>
   /** Accessible names of the editors: one per side, `both` for the unified layout's single editor. */
@@ -129,11 +138,29 @@ function named(label: string): Extension {
   return EditorView.contentAttributes.of({ 'aria-label': label, 'aria-readonly': 'true' })
 }
 
+/** Shows `pos` horizontally in the editor's own scroller, which unwrapped long lines scroll. */
+function showHorizontally(view: EditorView, pos: number): void {
+  view.requestMeasure({
+    // Coordinates mid-update would be stale; the write runs after the cycle.
+    read: () => view.coordsAtPos(pos),
+    write: (coords) => {
+      if (!coords) return
+      const scroller = view.scrollDOM
+      const box = scroller.getBoundingClientRect()
+      let dx = 0
+      if (coords.left < box.left + 40) dx = coords.left - box.left - 40
+      else if (coords.right > box.right - 12) dx = coords.right - box.right + 12
+      if (Math.abs(dx) >= 1) scroller.scrollBy({ left: dx })
+    },
+  })
+}
+
 /**
  * The editors sit in a list that scrolls as a whole, whose inner layers CodeMirror
  * would take for scroll containers (and scroll the list by the wrong amount, or not
  * at all): a place asked to be shown — a reveal, the cursor leaving the view — is
- * scrolled into view on the list itself.
+ * scrolled into view on the list itself. Horizontally the editor's own scroller
+ * still scrolls, so the place is brought in there too.
  */
 function scrollWithin(parent: NonNullable<DiffEditorSpec['scrollParent']>): Extension {
   return EditorView.scrollHandler.of((view, range, { y, yMargin }) => {
@@ -151,6 +178,7 @@ function scrollWithin(parent: NonNullable<DiffEditorSpec['scrollParent']>): Exte
     else if (rect.top < top + yMargin) delta = rect.top - top - yMargin
     else if (rect.bottom > box.bottom - yMargin) delta = rect.bottom - box.bottom + yMargin
     if (Math.abs(delta) >= 1) target.element.scrollBy({ top: delta })
+    showHorizontally(view, range.head)
     return true
   })
 }
@@ -165,10 +193,7 @@ function commonExtensions(spec: DiffEditorSpec): Extension[] {
     spec.lineNumbers ? lineNumbers() : [],
     highlightSpecialChars(),
     drawSelection(),
-    // No lineWrapping: off-screen wrapped lines are only height-estimated, the
-    // estimate undercounts wide CJK glyphs, and the shortfall keeps the tail of
-    // a long diff out of the viewport forever. Unwrapped lines are one uniform
-    // height, so the estimates are exact; long lines scroll horizontally.
+    spec.wrap ? EditorView.lineWrapping : [],
     syntaxHighlighting(diffHighlightStyle),
     language ?? [],
     markField,
@@ -270,6 +295,7 @@ export function goToChunk(handle: DiffEditorHandle, direction: 1 | -1, fromEdge 
   else target = [...ranges].reverse().find((range) => range.from < head)
   if (!target) return false
   view.dispatch({ selection: { anchor: target.from }, userEvent: 'select.byChunk' })
+  showHorizontally(view, target.from)
   markLines(view, target.from, target.to, 'focus')
   return true
 }

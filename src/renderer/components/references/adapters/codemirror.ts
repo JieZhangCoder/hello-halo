@@ -101,9 +101,15 @@ class CommentWidget extends WidgetType {
     const dom = document.createElement('div')
     dom.className = 'cm-haloComment'
     renderInlineComment(dom, this.props())
+    // Without wrapping the content slab is as wide as the longest line, which
+    // would push the card past the right edge: it keeps to the visible width
+    // and sticks to the left edge while the editor scrolls sideways.
+    const clamp = () => { dom.style.maxWidth = `${Math.max(0, view.scrollDOM.clientWidth - 16)}px` }
+    clamp()
     // The card grows as it is written in (and its twin with it): the editor measures its lines again.
-    const observer = new ResizeObserver(() => view.requestMeasure())
+    const observer = new ResizeObserver(() => { clamp(); view.requestMeasure() })
     observer.observe(dom)
+    observer.observe(view.scrollDOM)
     resizeObservers.set(dom, observer)
     return dom
   }
@@ -164,6 +170,8 @@ const referenceTheme = EditorView.baseTheme({
     borderBottom: '1.5px solid hsl(var(--primary) / 0.7)',
   },
   '.cm-haloComment': {
+    position: 'sticky',
+    left: '0',
     padding: '4px 12px 6px 8px',
   },
   // The merge-view selectors outrank a diff theme's changed-line tint, which would hide the flash.

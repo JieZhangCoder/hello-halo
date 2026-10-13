@@ -392,6 +392,7 @@ export const DiffStack = forwardRef<DiffStackHandle, DiffStackProps>(function Di
                   version={props.version}
                   layout={props.layout}
                   collapseUnchanged={props.collapseUnchanged}
+                  wrap={!single}
                   actionsFor={props.actionsFor}
                   sideExtensions={props.sideExtensions}
                 />

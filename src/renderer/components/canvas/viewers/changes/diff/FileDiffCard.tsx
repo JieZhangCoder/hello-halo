@@ -34,6 +34,8 @@ interface FileDiffCardProps {
   version: number
   layout: DiffLayout
   collapseUnchanged: boolean
+  /** Whether the editors wrap long lines; off in the one-file view of a large diff. */
+  wrap: boolean
   /** Buttons for the header; a stable function, so cards re-render only when what it shows changes. */
   actionsFor?: (file: ViewFile) => ReactNode
   sideExtensions?: (file: ViewFile, part: DiffPart, side: DiffSide, unified: boolean) => Extension[]
@@ -61,6 +63,7 @@ export const FileDiffCard = memo(function FileDiffCard({
   version,
   layout,
   collapseUnchanged,
+  wrap,
   actionsFor,
   sideExtensions,
 }: FileDiffCardProps) {
@@ -109,7 +112,7 @@ export const FileDiffCard = memo(function FileDiffCard({
   } else if (file.binary) {
     // Sizes once they are read; the plain note meanwhile, or if they cannot be read.
     content = body.status === 'ready' && body.diff.kind !== 'text'
-      ? <LoadedBody file={file} diff={body.diff} layout={layout} collapseUnchanged={collapseUnchanged} sideExtensions={sideExtensions} />
+      ? <LoadedBody file={file} diff={body.diff} layout={layout} collapseUnchanged={collapseUnchanged} wrap={wrap} sideExtensions={sideExtensions} />
       : <Note>{t('Binary file')}</Note>
   } else if (gate) {
     content = (
@@ -150,7 +153,7 @@ export const FileDiffCard = memo(function FileDiffCard({
       </Note>
     )
   } else {
-    content = <LoadedBody file={file} diff={body.diff} layout={layout} collapseUnchanged={collapseUnchanged} sideExtensions={sideExtensions} />
+    content = <LoadedBody file={file} diff={body.diff} layout={layout} collapseUnchanged={collapseUnchanged} wrap={wrap} sideExtensions={sideExtensions} />
   }
 
   return (
@@ -199,11 +202,12 @@ function Note({ children }: { children: ReactNode }) {
   return <div className="flex flex-wrap items-center gap-3 px-4 py-2.5 text-[12.5px] text-subtle-foreground" style={{ minHeight: NOTE_HEIGHT }}>{children}</div>
 }
 
-function LoadedBody({ file, diff, layout, collapseUnchanged, sideExtensions }: {
+function LoadedBody({ file, diff, layout, collapseUnchanged, wrap, sideExtensions }: {
   file: ViewFile
   diff: LoadedDiff
   layout: DiffLayout
   collapseUnchanged: boolean
+  wrap: boolean
   sideExtensions?: FileDiffCardProps['sideExtensions']
 }) {
   const { t, i18n } = useTranslation()
@@ -272,6 +276,7 @@ function LoadedBody({ file, diff, layout, collapseUnchanged, sideExtensions }: {
             part={part}
             layout={layout}
             collapseUnchanged={collapseUnchanged}
+            wrap={wrap}
             sideExtensions={sideExtensions}
             onReady={(handle) => onReady(index, handle)}
           />
@@ -281,11 +286,12 @@ function LoadedBody({ file, diff, layout, collapseUnchanged, sideExtensions }: {
   )
 }
 
-function DiffEditorHost({ file, part, layout, collapseUnchanged, sideExtensions, onReady }: {
+function DiffEditorHost({ file, part, layout, collapseUnchanged, wrap, sideExtensions, onReady }: {
   file: ViewFile
   part: DiffPart
   layout: DiffLayout
   collapseUnchanged: boolean
+  wrap: boolean
   sideExtensions?: FileDiffCardProps['sideExtensions']
   onReady: (handle: DiffEditorHandle | null) => void
 }) {
@@ -313,6 +319,7 @@ function DiffEditorHost({ file, part, layout, collapseUnchanged, sideExtensions,
       kind: part.kind,
       layout,
       collapseUnchanged,
+      wrap,
       path: shown.path,
       lineNumbers: part.lineNumbers,
       phrases,
@@ -329,7 +336,7 @@ function DiffEditorHost({ file, part, layout, collapseUnchanged, sideExtensions,
       onReadyRef.current(null)
       scope.dispose()
     }
-  }, [file.key, part, layout, collapseUnchanged, phrases, sideExtensions, scrollParent, resources])
+  }, [file.key, part, layout, collapseUnchanged, wrap, phrases, sideExtensions, scrollParent, resources])
 
   return <div ref={hostRef} className="min-w-0" />
 }
